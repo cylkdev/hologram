@@ -1533,6 +1533,17 @@ defmodule Hologram.Template.RendererTest do
                 }, @server}
     end
 
+    test "page origin given by the controller" do
+      ETS.put(PageDigestRegistryStub.ets_table_name(), Module39, :dummy_module_39_digest)
+      page_origin = %{scheme: "https", subdomain: "luma", base_host: "localhost", port: 5200}
+
+      {_html, component_registry, _server} =
+        render_page_without_tree(Module39, @params, @server, [{:page_origin, page_origin} | @opts])
+
+      assert component_registry["page"].struct.emitted_context[{Hologram.Runtime, :page_origin}] ==
+               page_origin
+    end
+
     test "emitted in page, accessed in component nested in layout" do
       ETS.put(PageDigestRegistryStub.ets_table_name(), Module46, :dummy_module_46_digest)
 

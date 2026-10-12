@@ -209,6 +209,29 @@ defmodule Hologram.Controller do
   end
 
   @doc """
+  Returns the origin of the page a request is for: the scheme, base domain and port of the public
+  url of the Phoenix endpoint the request passes through, and the request's subdomain on that
+  base domain (nil when it has none).
+  """
+  @spec page_origin(Plug.Conn.t()) :: %{
+          scheme: String.t(),
+          subdomain: String.t() | nil,
+          base_host: String.t(),
+          port: :inet.port_number()
+        }
+  def page_origin(conn) do
+    endpoint = Map.fetch!(conn.private, :phoenix_endpoint)
+    %URI{scheme: scheme, host: base_host, port: port} = endpoint.struct_url()
+
+    %{
+      scheme: scheme,
+      subdomain: Route.subdomain(conn.host, base_host),
+      base_host: base_host,
+      port: port
+    }
+  end
+
+  @doc """
   Extracts (uncast) params from the given URL path corresponding to the route of the given page module.
   """
   @spec extract_params(String.t(), module) :: %{String.t() => String.t()}
@@ -430,7 +453,8 @@ defmodule Hologram.Controller do
     renderer_opts = [
       csrf_token: masked_csrf_token,
       initial_page?: true,
-      instance_id: instance_id
+      instance_id: instance_id,
+      page_origin: page_origin(conn)
     ]
 
     handle_page_request(conn_with_csrf_token, page_module, params, [], renderer_opts)
@@ -552,7 +576,11 @@ defmodule Hologram.Controller do
       |> Map.get(:query_params)
       |> Page.cast_params(page_module)
 
-    renderer_opts = [initial_page?: false, instance_id: instance_id]
+    renderer_opts = [
+      initial_page?: false,
+      instance_id: instance_id,
+      page_origin: page_origin(conn)
+    ]
 
     case run_page_lifecycle(
            conn,

@@ -6,7 +6,6 @@ defmodule Hologram.Router do
   alias Hologram.Controller
   alias Hologram.Realtime.SSE
   alias Hologram.Router.PageModuleResolver
-  alias Hologram.Router.Route
   alias Hologram.Runtime.Connection
   alias Hologram.Runtime.PlugConnUtils
   alias Hologram.Runtime.Session
@@ -68,19 +67,12 @@ defmodule Hologram.Router do
   end
 
   match _ do
-    subdomain = Route.subdomain(conn.host, base_host(conn))
+    %{subdomain: subdomain} = Controller.page_origin(conn)
 
     if page_module = PageModuleResolver.resolve(subdomain, conn.request_path) do
       Controller.handle_initial_page_request(conn, page_module)
     else
       conn
     end
-  end
-
-  # The endpoint Phoenix put on the request; its url host is the base domain subdomain routes
-  # hang off.
-  defp base_host(conn) do
-    endpoint = Map.fetch!(conn.private, :phoenix_endpoint)
-    Keyword.fetch!(endpoint.config(:url), :host)
   end
 end

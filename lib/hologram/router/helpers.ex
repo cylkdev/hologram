@@ -61,6 +61,61 @@ defmodule Hologram.Router.Helpers do
     path
   end
 
+  @doc """
+  Builds the URL a link on a page with the given origin uses for the given page module or tuple
+  of a page module and params: the relative URL when the page is on the same subdomain or on a
+  plain route, or the full URL on the origin's base domain, scheme and port when it is on another
+  subdomain.
+  """
+  @spec page_url(module | tuple, map | nil) :: String.t()
+  def page_url(to, page_origin) do
+    path = page_path(to)
+
+    if same_subdomain?(to, page_origin) do
+      path
+    else
+      {subdomain, _route_path} = Route.split(target_page_module(to).__route__())
+      origin_url(page_origin, subdomain) <> path
+    end
+  end
+
+  @doc """
+  Returns whether a link to the given page module or tuple of a page module and params, on a page
+  with the given origin, stays on that page's host: the page is on a plain route or on the
+  origin's subdomain.
+  """
+  @spec same_subdomain?(module | tuple, map | nil) :: boolean
+  def same_subdomain?(to, page_origin) do
+    page_module = target_page_module(to)
+    {subdomain, _route_path} = Route.split(page_module.__route__())
+
+    cond do
+      is_nil(subdomain) ->
+        true
+
+      is_nil(page_origin) ->
+        raise ArgumentError,
+              ~s/page "#{Reflection.module_name(page_module)}" is on a subdomain, so its URL needs the page origin/
+
+      true ->
+        subdomain == page_origin.subdomain
+    end
+  end
+
+  # The scheme, the subdomain on the origin's base domain, and the port unless it is the scheme's
+  # default.
+  defp origin_url(page_origin, subdomain) do
+    "#{page_origin.scheme}://#{subdomain}.#{page_origin.base_host}" <>
+      port_suffix(page_origin.scheme, page_origin.port)
+  end
+
+  defp port_suffix("https", 443), do: ""
+  defp port_suffix("http", 80), do: ""
+  defp port_suffix(_scheme, port), do: ":#{port}"
+
+  defp target_page_module({page_module, _params}), do: page_module
+  defp target_page_module(page_module), do: page_module
+
   defp encode_param_value(value) do
     value
     |> to_string()

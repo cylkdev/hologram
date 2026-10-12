@@ -304,6 +304,7 @@ defmodule Hologram.Template.Renderer do
       |> put_page_mounted_flag_context(false)
       |> maybe_put_csrf_token_context(opts, initial_page?)
       |> maybe_put_instance_id_context(opts, initial_page?)
+      |> maybe_put_page_origin_context(opts)
 
     {initial_tree, initial_component_registry, final_server_struct} =
       render_page_inside_layout(
@@ -848,6 +849,22 @@ defmodule Hologram.Template.Renderer do
 
   defp maybe_put_csrf_token_context(page_component_struct, _opts, false) do
     page_component_struct
+  end
+
+  # The controller gives every page it renders its origin, which links read to address a page on
+  # another subdomain.
+  defp maybe_put_page_origin_context(page_component_struct, opts) do
+    case Keyword.fetch(opts, :page_origin) do
+      {:ok, page_origin} ->
+        Component.put_context(
+          page_component_struct,
+          {Hologram.Runtime, :page_origin},
+          page_origin
+        )
+
+      :error ->
+        page_component_struct
+    end
   end
 
   defp maybe_put_instance_id_context(page_component_struct, opts, true) do

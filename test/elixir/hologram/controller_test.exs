@@ -46,6 +46,7 @@ defmodule Hologram.ControllerTest do
   alias Hologram.Test.Fixtures.Controller.Module31
   alias Hologram.Test.Fixtures.Controller.Module32
   alias Hologram.Test.Fixtures.Controller.Module33
+  alias Hologram.Test.Fixtures.Router.Endpoint
   alias Hologram.Test.Fixtures.Controller.Module4
   alias Hologram.Test.Fixtures.Controller.Module5
   alias Hologram.Test.Fixtures.Controller.Module6
@@ -224,6 +225,7 @@ defmodule Hologram.ControllerTest do
   defp subsequent_page_request_conn(path, session_data \\ %{}) do
     :post
     |> Plug.Test.conn(path, "")
+    |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
     |> Plug.Test.init_test_session(session_data)
     |> Map.put(:body_params, %{"_json" => page_request_body()})
   end
@@ -255,6 +257,36 @@ defmodule Hologram.ControllerTest do
     setup_asset_manifest_cache(AssetManifestCacheStub)
 
     setup_page_digest_registry(PageDigestRegistryStub)
+  end
+
+  describe "page_origin/1" do
+    test "request on a subdomain" do
+      conn =
+        :get
+        |> Plug.Test.conn("http://luma.localhost/")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
+
+      assert page_origin(conn) == %{
+               scheme: "https",
+               subdomain: "luma",
+               base_host: "localhost",
+               port: 5200
+             }
+    end
+
+    test "request on the base domain" do
+      conn =
+        :get
+        |> Plug.Test.conn("http://localhost/")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
+
+      assert page_origin(conn) == %{
+               scheme: "https",
+               subdomain: nil,
+               base_host: "localhost",
+               port: 5200
+             }
+    end
   end
 
   describe "extract_params/2" do
@@ -1777,6 +1809,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-runtime-controller-module4")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module4)
 
@@ -1803,6 +1836,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-runtime-controller-module1/111/ccc/222")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module1)
 
@@ -1816,6 +1850,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-controller-module11/hello%20world/foo%2Fbar")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module11)
 
@@ -1828,6 +1863,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-controller-module9")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{"my_session_key" => "my_session_value"})
         |> handle_initial_page_request(Module9)
 
@@ -1840,6 +1876,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-controller-module13")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module13)
 
@@ -1852,6 +1889,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-controller-module2")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> Map.put(:req_headers, [{"cookie", "my_cookie_name=my_cookie_value"}])
         |> handle_initial_page_request(Module2)
@@ -1865,6 +1903,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-runtime-controller-module5")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module5)
 
@@ -1878,6 +1917,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-runtime-controller-module4")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module4)
 
@@ -1893,6 +1933,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-runtime-controller-module5")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module5)
 
@@ -1908,12 +1949,14 @@ defmodule Hologram.ControllerTest do
       conn_1 =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-runtime-controller-module5")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module5)
 
       conn_2 =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-runtime-controller-module5")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module5)
 
@@ -1926,6 +1969,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-controller-module10")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module10)
 
@@ -1938,6 +1982,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-runtime-controller-module4")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module4)
 
@@ -1952,6 +1997,7 @@ defmodule Hologram.ControllerTest do
       conn =
         :get
         |> Plug.Test.conn("/hologram-test-fixtures-controller-module3")
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Test.init_test_session(%{})
         |> handle_initial_page_request(Module3)
 
@@ -1966,6 +2012,7 @@ defmodule Hologram.ControllerTest do
 
       :get
       |> Plug.Test.conn("/hologram-test-fixtures-runtime-controller-module12")
+      |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
       |> Plug.Test.init_test_session(%{})
       |> handle_initial_page_request(Module12)
 
@@ -2705,6 +2752,7 @@ defmodule Hologram.ControllerTest do
         "/hologram/page/Hologram.Test.Fixtures.Controller.Module4",
         ""
       )
+      |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
       |> Plug.Test.init_test_session(%{})
       |> Map.put(:body_params, %{"_json" => body})
       |> handle_subsequent_page_request(Module4)

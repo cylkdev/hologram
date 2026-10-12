@@ -115,6 +115,7 @@ defmodule Hologram.RouterTest do
           "/hologram/page/Hologram.Test.Fixtures.Router.Module1?a=123&b=xyz",
           ""
         )
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> Plug.Conn.put_req_header("content-type", "application/json")
         |> Plug.Test.init_test_session(%{})
         |> Map.put(:body_params, %{"_json" => parsed_json})

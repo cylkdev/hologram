@@ -10,6 +10,7 @@ defmodule Hologram.Router.HelpersTest do
   alias Hologram.Test.Fixtures.Router.Helpers.Module3
   alias Hologram.Test.Fixtures.Router.Helpers.Module4
   alias Hologram.Test.Fixtures.Router.Helpers.Module5
+  alias Hologram.Test.Fixtures.Router.Helpers.Module6
 
   use_module_stub :asset_path_registry
 
@@ -104,6 +105,56 @@ defmodule Hologram.Router.HelpersTest do
                    fn ->
                      page_path(Module2, param_1: :abc, param_2: 123, param_3: "xyz", param_4: 987)
                    end
+    end
+  end
+
+  describe "page_url/2" do
+    setup do
+      [page_origin: %{scheme: "https", subdomain: "luma", base_host: "localhost", port: 5200}]
+    end
+
+    test "page on the same subdomain", %{page_origin: page_origin} do
+      assert page_url(Module4, page_origin) == "/hologram-test-fixtures-router-helpers-module4"
+    end
+
+    test "page on a plain route", %{page_origin: page_origin} do
+      assert page_url(Module1, page_origin) == "/hologram-test-fixtures-router-helpers-module1"
+    end
+
+    test "page on another subdomain", %{page_origin: page_origin} do
+      assert page_url(Module6, page_origin) ==
+               "https://cylk.localhost:5200/hologram-test-fixtures-router-helpers-module6"
+    end
+
+    test "page on another subdomain with params", %{page_origin: page_origin} do
+      page_origin = %{page_origin | subdomain: "cylk"}
+
+      assert page_url({Module5, param_1: :abc, param_2: 123}, page_origin) ==
+               "https://luma.localhost:5200/hologram-test-fixtures-router-helpers-module5/abc/123"
+    end
+
+    test "page on another subdomain from the base domain", %{page_origin: page_origin} do
+      page_origin = %{page_origin | subdomain: nil}
+
+      assert page_url(Module4, page_origin) ==
+               "https://luma.localhost:5200/hologram-test-fixtures-router-helpers-module4"
+    end
+
+    test "default port is left out", %{page_origin: page_origin} do
+      page_origin = %{page_origin | base_host: "example.com", port: 443}
+
+      assert page_url(Module6, page_origin) ==
+               "https://cylk.example.com/hologram-test-fixtures-router-helpers-module6"
+    end
+
+    test "page on a subdomain without a page origin" do
+      assert_raise ArgumentError,
+                   ~s/page "Hologram.Test.Fixtures.Router.Helpers.Module6" is on a subdomain, so its URL needs the page origin/,
+                   fn -> page_url(Module6, nil) end
+    end
+
+    test "page on a plain route without a page origin" do
+      assert page_url(Module1, nil) == "/hologram-test-fixtures-router-helpers-module1"
     end
   end
 end
