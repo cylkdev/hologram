@@ -28,4 +28,19 @@ defmodule Mix.Tasks.Holo.RoutesTest do
     assert String.contains?(output, expected_header_output)
     assert String.contains?(output, expected_route_output)
   end
+
+  test "run/1 prints subdomain routes as written, after the plain routes, grouped by subdomain" do
+    output = capture_io(fn -> Task.run([]) end)
+
+    plain_route = "\n/hologram-test-fixtures-mix-tasks-holo-routes-module1\n"
+    cylk_route = "\n//cylk.:host/hologram-test-fixtures-mix-tasks-holo-routes-module4\n"
+    luma_route = "\n//luma.:host/hologram-test-fixtures-mix-tasks-holo-routes-module3\n"
+
+    {plain_position, _length} = :binary.match(output, plain_route)
+    {cylk_position, _length} = :binary.match(output, cylk_route)
+    {luma_position, _length} = :binary.match(output, luma_route)
+
+    assert plain_position < cylk_position
+    assert cylk_position < luma_position
+  end
 end
