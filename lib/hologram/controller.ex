@@ -12,6 +12,7 @@ defmodule Hologram.Controller do
   alias Hologram.Realtime.Receipt
   alias Hologram.Realtime.SubscriptionRegistry
   alias Hologram.Realtime.Tombstone
+  alias Hologram.Router.Helpers, as: RouterHelpers
   alias Hologram.Router.PageModuleResolver
   alias Hologram.Router.Route
   alias Hologram.Runtime.Cookie
@@ -567,7 +568,20 @@ defmodule Hologram.Controller do
   @spec handle_subsequent_page_request(Plug.Conn.t(), module) :: Plug.Conn.t()
   def handle_subsequent_page_request(initial_conn, page_module) do
     conn = PlugConnUtils.init_conn(initial_conn)
+    page_origin = page_origin(conn)
 
+    if RouterHelpers.same_subdomain?(page_module, page_origin) do
+      send_subsequent_page(conn, page_module, page_origin)
+    else
+      # A page on another subdomain is not a page here. The answer carries no page-data header,
+      # so the client loads the link's address itself.
+      conn
+      |> Plug.Conn.send_resp(404, "")
+      |> Plug.Conn.halt()
+    end
+  end
+
+  defp send_subsequent_page(conn, page_module, page_origin) do
     {instance_id, client_claimed_sub_keys} = extract_page_request_payload(conn)
 
     params =
@@ -579,7 +593,7 @@ defmodule Hologram.Controller do
     renderer_opts = [
       initial_page?: false,
       instance_id: instance_id,
-      page_origin: page_origin(conn)
+      page_origin: page_origin
     ]
 
     case run_page_lifecycle(

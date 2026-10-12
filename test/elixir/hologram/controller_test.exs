@@ -2547,6 +2547,40 @@ defmodule Hologram.ControllerTest do
       assert response["tree"] == []
     end
 
+    test "page on the request's subdomain is answered as data" do
+      ETS.put(PageDigestRegistryStub.ets_table_name(), Module33, :dummy_module_33_digest)
+
+      conn =
+        "http://luma.localhost/hologram/page/Hologram.Test.Fixtures.Controller.Module33?aaa=111&bbb=222"
+        |> subsequent_page_request_conn()
+        |> handle_subsequent_page_request(Module33)
+
+      assert conn.status == 200
+      assert Plug.Conn.get_resp_header(conn, "hologram-page-data") == ["true"]
+    end
+
+    test "page on another subdomain is not a page here" do
+      conn =
+        "http://cylk.localhost/hologram/page/Hologram.Test.Fixtures.Controller.Module33?aaa=111&bbb=222"
+        |> subsequent_page_request_conn()
+        |> handle_subsequent_page_request(Module33)
+
+      assert conn.halted == true
+      assert conn.status == 404
+      assert Plug.Conn.get_resp_header(conn, "hologram-page-data") == []
+    end
+
+    test "page on a subdomain requested on the base domain is not a page here" do
+      conn =
+        "http://localhost/hologram/page/Hologram.Test.Fixtures.Controller.Module33?aaa=111&bbb=222"
+        |> subsequent_page_request_conn()
+        |> handle_subsequent_page_request(Module33)
+
+      assert conn.halted == true
+      assert conn.status == 404
+      assert Plug.Conn.get_resp_header(conn, "hologram-page-data") == []
+    end
+
     test "casts page params and carries them in the payload" do
       ETS.put(PageDigestRegistryStub.ets_table_name(), Module1, :dummy_module_1_digest)
 
