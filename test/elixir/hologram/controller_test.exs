@@ -45,6 +45,7 @@ defmodule Hologram.ControllerTest do
   alias Hologram.Test.Fixtures.Controller.Module30
   alias Hologram.Test.Fixtures.Controller.Module31
   alias Hologram.Test.Fixtures.Controller.Module32
+  alias Hologram.Test.Fixtures.Controller.Module33
   alias Hologram.Test.Fixtures.Controller.Module4
   alias Hologram.Test.Fixtures.Controller.Module5
   alias Hologram.Test.Fixtures.Controller.Module6
@@ -239,7 +240,8 @@ defmodule Hologram.ControllerTest do
         SearchTree.add_route(acc, page_module.__route__(), page_module)
       end)
 
-    :persistent_term.put(persistent_term_key, search_tree)
+    # The pages' routes are plain, so the tree is the plain routes' table.
+    :persistent_term.put(persistent_term_key, %{nil => search_tree})
 
     on_exit(fn -> :persistent_term.erase(persistent_term_key) end)
 
@@ -266,6 +268,12 @@ defmodule Hologram.ControllerTest do
       url_path = "/hologram-test-fixtures-runtime-controller-module1/hello%20world/ccc/foo%2Fbar"
 
       assert extract_params(url_path, Module1) == %{"aaa" => "hello world", "bbb" => "foo/bar"}
+    end
+
+    test "extracts params from URL path of a subdomain route" do
+      url_path = "/hologram-test-fixtures-runtime-controller-module33/111/ccc/222"
+
+      assert extract_params(url_path, Module33) == %{"aaa" => "111", "bbb" => "222"}
     end
   end
 

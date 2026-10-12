@@ -4,6 +4,7 @@ defmodule Hologram.Router.PageModuleResolver do
   use GenServer
 
   alias Hologram.Reflection
+  alias Hologram.Router.Route
   alias Hologram.Router.SearchTree
 
   @doc """
@@ -42,18 +43,26 @@ defmodule Hologram.Router.PageModuleResolver do
   end
 
   @doc """
-  Given a request path it returns the page module that handles it.
+  Given the request's subdomain (nil when it has none) and its path, returns the page module
+  that handles it, or false when no page does.
+
+  A page whose route names the subdomain wins over a plain route with the same path; a plain
+  route is served on every host.
   """
-  @spec resolve(String.t()) :: module
-  def resolve(request_path) do
-    impl().persistent_term_key()
-    |> :persistent_term.get()
-    |> SearchTree.match_route(request_path)
+  @spec resolve(String.t() | nil, String.t()) :: module | false
+  def resolve(subdomain, request_path) do
+    search_trees = :persistent_term.get(impl().persistent_term_key())
+
+    match(search_trees, subdomain, request_path) ||
+      match(search_trees, nil, request_path)
   end
 
-  defp build_search_tree do
-    Enum.reduce(Reflection.list_pages(), %SearchTree.Node{}, fn page_module, acc ->
-      SearchTree.add_route(acc, page_module.__route__(), page_module)
+  # One route table per subdomain, plus the plain routes' table under nil.
+  defp build_search_trees do
+    Enum.reduce(Reflection.list_pages(), %{nil => %SearchTree.Node{}}, fn page_module, acc ->
+      {subdomain, path} = Route.split(page_module.__route__())
+      search_tree = Map.get(acc, subdomain, %SearchTree.Node{})
+      Map.put(acc, subdomain, SearchTree.add_route(search_tree, path, page_module))
     end)
   end
 
@@ -61,10 +70,17 @@ defmodule Hologram.Router.PageModuleResolver do
     Application.get_env(:hologram, :page_module_resolver_impl, __MODULE__)
   end
 
+  defp match(search_trees, subdomain, request_path) do
+    case Map.fetch(search_trees, subdomain) do
+      {:ok, search_tree} -> SearchTree.match_route(search_tree, request_path)
+      :error -> false
+    end
+  end
+
   defp populate_persistent_term do
-    search_tree = build_search_tree()
+    search_trees = build_search_trees()
     persistent_term_key = impl().persistent_term_key()
 
-    :persistent_term.put(persistent_term_key, search_tree)
+    :persistent_term.put(persistent_term_key, search_trees)
   end
 end

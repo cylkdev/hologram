@@ -13,6 +13,7 @@ defmodule Hologram.Controller do
   alias Hologram.Realtime.SubscriptionRegistry
   alias Hologram.Realtime.Tombstone
   alias Hologram.Router.PageModuleResolver
+  alias Hologram.Router.Route
   alias Hologram.Runtime.Cookie
   alias Hologram.Runtime.CSRFProtection
   alias Hologram.Runtime.Deserializer
@@ -181,7 +182,7 @@ defmodule Hologram.Controller do
     #
     # The resolver answers false, not nil, when no page owns the path.
     page_module =
-      is_nil(host) && is_nil(scheme) && path && PageModuleResolver.resolve(path)
+      is_nil(host) && is_nil(scheme) && path && PageModuleResolver.resolve(nil, path)
 
     if page_module do
       query_params = if query, do: URI.decode_query(query), else: %{}
@@ -212,7 +213,8 @@ defmodule Hologram.Controller do
   """
   @spec extract_params(String.t(), module) :: %{String.t() => String.t()}
   def extract_params(url_path, page_module) do
-    route_segments = String.split(page_module.__route__(), "/")
+    {_subdomain, route_path} = Route.split(page_module.__route__())
+    route_segments = String.split(route_path, "/")
     url_path_segments = String.split(url_path, "/")
 
     route_segments
