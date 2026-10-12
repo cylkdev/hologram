@@ -13,11 +13,14 @@ defmodule Hologram.Router.SearchTree do
 
   @doc """
   Adds route info for the given URL path to the search tree by creating all nodes related to that URL path.
+
+  Raises when a page already added matches the same URLs, since the tree could answer only one of
+  them.
   """
   @spec add_route(SearchTree.Node.t(), String.t(), module) :: SearchTree.Node.t()
   def add_route(search_tree, url_path, page_module) do
     url_path_segments = url_path_segments(url_path)
-    insert_node(search_tree, url_path_segments, page_module)
+    insert_node(search_tree, url_path_segments, {page_module, url_path})
   end
 
   @doc """
@@ -44,15 +47,20 @@ defmodule Hologram.Router.SearchTree do
     end
   end
 
-  defp insert_node(current_node, tree_path, value)
+  defp insert_node(current_node, tree_path, route)
 
-  defp insert_node(current_node, [], value) do
-    %{current_node | value: value}
+  defp insert_node(%{value: nil} = current_node, [], {page_module, _url_path}) do
+    %{current_node | value: page_module}
   end
 
-  defp insert_node(%{children: children} = current_node, [head | tail], value) do
+  defp insert_node(%{value: existing_page_module}, [], {page_module, url_path}) do
+    raise ArgumentError,
+          ~s/pages "#{inspect(existing_page_module)}" and "#{inspect(page_module)}" both match "#{url_path}"/
+  end
+
+  defp insert_node(%{children: children} = current_node, [head | tail], route) do
     child = children[head] || %SearchTree.Node{}
-    new_children = Map.put(children, head, insert_node(child, tail, value))
+    new_children = Map.put(children, head, insert_node(child, tail, route))
     %{current_node | children: new_children}
   end
 

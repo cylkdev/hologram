@@ -304,6 +304,34 @@ defmodule Hologram.Router.SearchTreeTest do
     end
   end
 
+  describe "add_route/3, clashing routes" do
+    test "same path as a route already added" do
+      search_tree = add_route(%SearchTree.Node{}, "/aaa/bbb", :page_1)
+
+      assert_raise ArgumentError,
+                   ~s/pages ":page_1" and ":page_2" both match "\/aaa\/bbb"/,
+                   fn -> add_route(search_tree, "/aaa/bbb", :page_2) end
+    end
+
+    test "same path with differently named params" do
+      search_tree = add_route(%SearchTree.Node{}, "/aaa/:id", :page_1)
+
+      assert_raise ArgumentError,
+                   ~s/pages ":page_1" and ":page_2" both match "\/aaa\/:slug"/,
+                   fn -> add_route(search_tree, "/aaa/:slug", :page_2) end
+    end
+
+    test "path ending where a longer route passes through" do
+      search_tree = add_route(%SearchTree.Node{}, "/aaa/bbb", :page_1)
+
+      assert %SearchTree.Node{value: :page_2} =
+               search_tree
+               |> add_route("/aaa", :page_2)
+               |> Map.fetch!(:children)
+               |> Map.fetch!("aaa")
+    end
+  end
+
   describe "match_route/2" do
     setup do
       [search_tree: build_search_tree_fixture()]
