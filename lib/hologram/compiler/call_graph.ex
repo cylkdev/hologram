@@ -399,7 +399,9 @@ defmodule Hologram.Compiler.CallGraph do
     {Hologram.Component.Action, :__struct__, 0},
     {Hologram.Component.Command, :__struct__, 0},
     {Hologram.Router.Helpers, :page_path, 1},
-    {Hologram.Router.Helpers, :page_path, 2}
+    {Hologram.Router.Helpers, :page_path, 2},
+    {Hologram.Router.Helpers, :page_url, 2},
+    {Hologram.Router.Helpers, :same_subdomain?, 2}
   ]
 
   @mfas_used_by_client_runtime [

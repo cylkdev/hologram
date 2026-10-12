@@ -15,6 +15,7 @@ defmodule Hologram.ControllerTest do
   alias Hologram.Realtime.Receipt
   alias Hologram.Realtime.SubscriptionRegistry
   alias Hologram.Realtime.Tombstone
+  alias Hologram.Router.Route
   alias Hologram.Router.SearchTree
   alias Hologram.Runtime.Cookie
   alias Hologram.Runtime.CSRFProtection
@@ -97,6 +98,7 @@ defmodule Hologram.ControllerTest do
     |> Plug.Test.conn(path, "")
     |> Plug.Test.init_test_session(session)
     |> Map.put(:body_params, %{"_json" => parsed_json})
+    |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
   end
 
   defp execute_command_request(payload) do
@@ -237,13 +239,15 @@ defmodule Hologram.ControllerTest do
 
     stub(PageModuleResolverMock, :persistent_term_key, fn -> persistent_term_key end)
 
-    search_tree =
-      Enum.reduce(page_modules, %SearchTree.Node{}, fn page_module, acc ->
-        SearchTree.add_route(acc, page_module.__route__(), page_module)
+    # One route table per subdomain, plus the plain routes' table under nil.
+    search_trees =
+      Enum.reduce(page_modules, %{nil => %SearchTree.Node{}}, fn page_module, acc ->
+        {subdomain, path} = Route.split(page_module.__route__())
+        search_tree = Map.get(acc, subdomain, %SearchTree.Node{})
+        Map.put(acc, subdomain, SearchTree.add_route(search_tree, path, page_module))
       end)
 
-    # The pages' routes are plain, so the tree is the plain routes' table.
-    :persistent_term.put(persistent_term_key, %{nil => search_tree})
+    :persistent_term.put(persistent_term_key, search_trees)
 
     on_exit(fn -> :persistent_term.erase(persistent_term_key) end)
 
@@ -617,28 +621,30 @@ defmodule Hologram.ControllerTest do
     end
   end
 
-  describe "resolve_redirect_target/1" do
+  describe "resolve_redirect_target/2" do
     setup do
-      stub_page_module_resolver([Module1, Module11, Module32, Module4])
+      stub_page_module_resolver([Module1, Module11, Module32, Module33, Module4])
     end
 
     test "resolves a path to the page that owns it" do
       to = Module4.__route__()
 
-      assert resolve_redirect_target(to) == {:redirect, to, Module4, %{}}
+      assert resolve_redirect_target(to, nil) == {:redirect, to, Module4, %{}}
     end
 
     test "casts params carried by the path" do
       assert {:redirect, _to, Module1, %{aaa: 111, bbb: 222}} =
                resolve_redirect_target(
-                 "/hologram-test-fixtures-runtime-controller-module1/111/ccc/222"
+                 "/hologram-test-fixtures-runtime-controller-module1/111/ccc/222",
+                 nil
                )
     end
 
     test "decodes params carried by the path" do
       assert {:redirect, _to, Module11, %{param_a: "hello world", param_b: "x"}} =
                resolve_redirect_target(
-                 "/hologram-test-fixtures-controller-module11/hello%20world/x"
+                 "/hologram-test-fixtures-controller-module11/hello%20world/x",
+                 nil
                )
     end
 
@@ -647,7 +653,8 @@ defmodule Hologram.ControllerTest do
     test "casts params carried by the query string" do
       assert {:redirect, _to, Module32, %{param_a: "hello world", param_b: 42}} =
                resolve_redirect_target(
-                 "/hologram-test-fixtures-controller-module32?param_a=hello+world&param_b=42"
+                 "/hologram-test-fixtures-controller-module32?param_a=hello+world&param_b=42",
+                 nil
                )
     end
 
@@ -656,7 +663,7 @@ defmodule Hologram.ControllerTest do
     test "leaves out a query param the page does not declare" do
       to = Module4.__route__() <> "?utm_source=x"
 
-      assert resolve_redirect_target(to) == {:redirect, to, Module4, %{}}
+      assert resolve_redirect_target(to, nil) == {:redirect, to, Module4, %{}}
     end
 
     test "keeps the params the page declares when undeclared ones travel with them" do
@@ -664,11 +671,11 @@ defmodule Hologram.ControllerTest do
         "/hologram-test-fixtures-controller-module11/hello%20world/x?utm_source=y"
 
       assert {:redirect, ^to, Module11, %{param_a: "hello world", param_b: "x"}} =
-               resolve_redirect_target(to)
+               resolve_redirect_target(to, nil)
     end
 
     test "resolves a target no page owns to no module" do
-      assert resolve_redirect_target("https://example.com/x") ==
+      assert resolve_redirect_target("https://example.com/x", nil) ==
                {:redirect, "https://example.com/x", nil, nil}
     end
 
@@ -677,24 +684,39 @@ defmodule Hologram.ControllerTest do
     test "resolves a target on another origin to no module, path collision or not" do
       to = "https://example.com" <> Module4.__route__()
 
-      assert resolve_redirect_target(to) == {:redirect, to, nil, nil}
+      assert resolve_redirect_target(to, nil) == {:redirect, to, nil, nil}
     end
 
     test "resolves a protocol-relative target to no module" do
       to = "//example.com" <> Module4.__route__()
 
-      assert resolve_redirect_target(to) == {:redirect, to, nil, nil}
+      assert resolve_redirect_target(to, nil) == {:redirect, to, nil, nil}
     end
 
     # A scheme with no authority still names something other than a path within this app.
     test "resolves a target carrying a scheme to no module" do
       to = "https://" <> Module4.__route__()
 
-      assert resolve_redirect_target(to) == {:redirect, to, nil, nil}
+      assert resolve_redirect_target(to, nil) == {:redirect, to, nil, nil}
+    end
+
+    test "resolves a path to the page on the request's subdomain that owns it" do
+      assert resolve_redirect_target(
+               "/hologram-test-fixtures-runtime-controller-module33/111/ccc/222",
+               "luma"
+             ) ==
+               {:redirect, "/hologram-test-fixtures-runtime-controller-module33/111/ccc/222",
+                Module33, %{aaa: 111, bbb: 222}}
+    end
+
+    test "resolves a path whose page is on another subdomain to no module" do
+      to = "/hologram-test-fixtures-runtime-controller-module33/111/ccc/222"
+
+      assert resolve_redirect_target(to, "cylk") == {:redirect, to, nil, nil}
     end
 
     test "resolves a path the framework itself serves to no module" do
-      assert resolve_redirect_target("/hologram/ping") ==
+      assert resolve_redirect_target("/hologram/ping", nil) ==
                {:redirect, "/hologram/ping", nil, nil}
     end
   end

@@ -9,6 +9,8 @@ defmodule Hologram.ServerTest do
   alias Hologram.Server.Metadata
   alias Hologram.Test.Fixtures.Router.Helpers.Module1
   alias Hologram.Test.Fixtures.Router.Helpers.Module2
+  alias Hologram.Test.Fixtures.Router.Helpers.Module4
+  alias Hologram.Test.Fixtures.Router.Helpers.Module6
 
   describe "append_response_header/3" do
     test "appends a value to an existing response header" do
@@ -932,6 +934,25 @@ defmodule Hologram.ServerTest do
 
       assert result.response_headers == %{
                "location" => "/hologram-test-fixtures-router-helpers-module2/foo/42"
+             }
+    end
+
+    test "redirects to a page module on the served page's subdomain by its path" do
+      page_origin = %{scheme: "https", subdomain: "luma", base_host: "localhost", port: 5200}
+      result = put_redirect(%Server{page_origin: page_origin}, Module4)
+
+      assert result.response_headers == %{
+               "location" => "/hologram-test-fixtures-router-helpers-module4"
+             }
+    end
+
+    test "redirects to a page module on another subdomain by its full URL" do
+      page_origin = %{scheme: "https", subdomain: "luma", base_host: "localhost", port: 5200}
+      result = put_redirect(%Server{page_origin: page_origin}, Module6)
+
+      assert result.response_headers == %{
+               "location" =>
+                 "https://cylk.localhost:5200/hologram-test-fixtures-router-helpers-module6"
              }
     end
 

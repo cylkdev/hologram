@@ -81,6 +81,7 @@ defmodule Hologram.RouterTest do
         |> Plug.Test.init_test_session(%{CSRFProtection.session_key() => unmasked_csrf_token})
         |> Map.put(:body_params, %{"_json" => parsed_json})
         |> Plug.Conn.put_req_header("x-csrf-token", masked_csrf_token)
+        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
         |> call([])
 
       assert Jason.decode!(conn.resp_body) == %{

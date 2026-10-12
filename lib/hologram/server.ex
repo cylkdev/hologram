@@ -16,6 +16,7 @@ defmodule Hologram.Server do
             ip: nil,
             method: nil,
             next_action: nil,
+            page_origin: nil,
             path: nil,
             port: nil,
             query: %{},
@@ -43,6 +44,7 @@ defmodule Hologram.Server do
           ip: String.t() | nil,
           method: atom() | nil,
           next_action: Action.t() | nil,
+          page_origin: map | nil,
           path: String.t() | nil,
           port: :inet.port_number() | nil,
           query: %{String.t() => String.t()},
@@ -542,7 +544,8 @@ defmodule Hologram.Server do
   @doc """
   Sets a temporary (302) redirect to the given target, marking the response as terminal.
 
-  The target is either a URL string, used as-is, or a page module, resolved to its path.
+  The target is either a URL string, used as-is, or a page module, resolved to its path, or to
+  its full URL when the page is on another subdomain than the page being served.
   For a page with params, use `put_redirect/3`. For a different status code, follow with
   `put_status/2`.
 
@@ -559,7 +562,7 @@ defmodule Hologram.Server do
   end
 
   def put_redirect(server, page_module) when is_atom(page_module) do
-    put_redirect(server, RouterHelpers.page_path(page_module))
+    put_redirect(server, RouterHelpers.page_url(page_module, server.page_origin))
   end
 
   # TODO: reconsider if this argument validation is needed once Elixir has static typing
@@ -582,7 +585,7 @@ defmodule Hologram.Server do
   """
   @spec put_redirect(t(), module(), keyword() | map()) :: t()
   def put_redirect(server, page_module, params) when is_atom(page_module) do
-    put_redirect(server, RouterHelpers.page_path(page_module, params))
+    put_redirect(server, RouterHelpers.page_url({page_module, params}, server.page_origin))
   end
 
   # TODO: reconsider if this argument validation is needed once Elixir has static typing

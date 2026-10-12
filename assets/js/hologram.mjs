@@ -1322,7 +1322,28 @@ export default class Hologram {
   }
 
   // Tested implicitely in feature tests
+  //
+  // A page on another subdomain is on another host, so the browser loads it.
   static async #navigateToPage(toParam) {
+    const pageOrigin = $.#pageOrigin();
+
+    if (
+      !Type.isTrue(
+        Elixir_Hologram_Router_Helpers["same_subdomain?/2"](
+          toParam,
+          pageOrigin,
+        ),
+      )
+    ) {
+      Hologram.leaveApp(
+        Bitstring.toText(
+          Elixir_Hologram_Router_Helpers["page_url/2"](toParam, pageOrigin),
+        ),
+      );
+
+      return null;
+    }
+
     const pagePath = $.#buildPagePath(toParam);
 
     return Client.fetchPage(
@@ -1344,6 +1365,16 @@ export default class Hologram {
         callback();
       });
     }
+  }
+
+  // The origin the server rendered the current page with, or nil when it rendered none.
+  // Deps: [:maps.get/3]
+  static #pageOrigin() {
+    return Erlang_Maps["get/3"](
+      Type.tuple([Type.alias("Hologram.Runtime"), Type.atom("page_origin")]),
+      ComponentRegistry.getComponentEmittedContext("page"),
+      Type.nil(),
+    );
   }
 
   // Mirrors Hologram.Router.Helpers.page_bundle_path/1

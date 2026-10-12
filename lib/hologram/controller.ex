@@ -161,8 +161,8 @@ defmodule Hologram.Controller do
   end
 
   @doc """
-  Resolves a redirect target into the page it names, so a client that navigates by page module can
-  ask for that page's data directly.
+  Resolves a redirect target, on the request's subdomain (nil when it has none), into the page it
+  names, so a client that navigates by page module can ask for that page's data directly.
 
   Uses the same resolution the router uses for an incoming request, which is what keeps a redirect
   landing on the page a browser would have landed on. Params come from both places a page can carry
@@ -173,8 +173,9 @@ defmodule Hologram.Controller do
   A target no page owns - an external URL, or a path the framework itself serves - resolves to no
   module, leaving the client to hand it to the browser.
   """
-  @spec resolve_redirect_target(String.t()) :: {:redirect, String.t(), module | nil, map | nil}
-  def resolve_redirect_target(to) do
+  @spec resolve_redirect_target(String.t(), String.t() | nil) ::
+          {:redirect, String.t(), module | nil, map | nil}
+  def resolve_redirect_target(to, subdomain) do
     %URI{host: host, path: path, query: query, scheme: scheme} = URI.parse(to)
 
     # Only a target that names no host of its own can be one of this app's pages. The same path
@@ -183,7 +184,7 @@ defmodule Hologram.Controller do
     #
     # The resolver answers false, not nil, when no page owns the path.
     page_module =
-      is_nil(host) && is_nil(scheme) && path && PageModuleResolver.resolve(nil, path)
+      is_nil(host) && is_nil(scheme) && path && PageModuleResolver.resolve(subdomain, path)
 
     if page_module do
       query_params = if query, do: URI.decode_query(query), else: %{}
@@ -361,6 +362,7 @@ defmodule Hologram.Controller do
       Server.from(conn)
       | cid: target,
         instance_id: instance_id,
+        page_origin: page_origin(conn),
         subscriptions: target_subscriptions
     }
 
@@ -788,7 +790,8 @@ defmodule Hologram.Controller do
     server_struct = %{
       Server.from(conn)
       | cid: "page",
-        instance_id: renderer_opts[:instance_id]
+        instance_id: renderer_opts[:instance_id],
+        page_origin: renderer_opts[:page_origin]
     }
 
     middleware_server_struct =
@@ -881,7 +884,9 @@ defmodule Hologram.Controller do
           |> Map.delete("location")
           |> Map.to_list()
         )
-        |> send_page_data(build_page_data_payload(resolve_redirect_target(to)))
+        |> send_page_data(
+          build_page_data_payload(resolve_redirect_target(to, page_origin(conn).subdomain))
+        )
     end
   end
 
