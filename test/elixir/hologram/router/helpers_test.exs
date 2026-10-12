@@ -8,6 +8,8 @@ defmodule Hologram.Router.HelpersTest do
   alias Hologram.Test.Fixtures.Router.Helpers.Module1
   alias Hologram.Test.Fixtures.Router.Helpers.Module2
   alias Hologram.Test.Fixtures.Router.Helpers.Module3
+  alias Hologram.Test.Fixtures.Router.Helpers.Module4
+  alias Hologram.Test.Fixtures.Router.Helpers.Module5
 
   use_module_stub :asset_path_registry
 
@@ -45,12 +47,21 @@ defmodule Hologram.Router.HelpersTest do
       assert page_path({Module2, param_1: :abc, param_2: 123}) ==
                "/hologram-test-fixtures-router-helpers-module2/abc/123"
     end
+
+    test "subdomain route" do
+      assert page_path(Module4) == "/hologram-test-fixtures-router-helpers-module4"
+    end
   end
 
   describe "page_path/2" do
     test "valid keyword params" do
       assert page_path(Module2, param_1: :abc, param_2: 123) ==
                "/hologram-test-fixtures-router-helpers-module2/abc/123"
+    end
+
+    test "subdomain route with params" do
+      assert page_path(Module5, param_1: :abc, param_2: 123) ==
+               "/hologram-test-fixtures-router-helpers-module5/abc/123"
     end
 
     test "valid map params" do

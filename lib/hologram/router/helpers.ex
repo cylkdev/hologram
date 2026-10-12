@@ -1,6 +1,7 @@
 defmodule Hologram.Router.Helpers do
   alias Hologram.Assets.PathRegistry, as: AssetPathRegistry
   alias Hologram.Reflection
+  alias Hologram.Router.Route
 
   @doc """
   Retrieves the asset path, including the digest, for the specified static file within the static directory.
@@ -49,7 +50,8 @@ defmodule Hologram.Router.Helpers do
 
   def page_path(page_module, params) do
     required_params = page_module.__params__()
-    initial_acc = {params, page_module.__route__()}
+    {_subdomain, route_path} = Route.split(page_module.__route__())
+    initial_acc = {params, route_path}
 
     {remaining_params, path} =
       Enum.reduce(required_params, initial_acc, &process_param(&1, &2, page_module, params))
