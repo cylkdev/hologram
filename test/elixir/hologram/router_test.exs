@@ -9,6 +9,7 @@ defmodule Hologram.RouterTest do
   alias Hologram.Assets.PathRegistry, as: AssetPathRegistry
   alias Hologram.Commons.ETS
   alias Hologram.Realtime.Handshake
+  alias Hologram.Router.PageModuleResolver
   alias Hologram.Runtime.CSRFProtection
   alias Hologram.Test.Fixtures.Router.Module1
   alias Hologram.Test.Fixtures.Router.Endpoint
@@ -247,13 +248,21 @@ defmodule Hologram.RouterTest do
     end
   end
 
-  describe "catch-all route with a subdomain route" do
+  describe "catch-all route with a page served on its own host" do
     setup do
       ETS.put(PageDigestRegistryStub.ets_table_name(), Module3, :dummy_module_3_digest)
-      :ok
+
+      persistent_term_key = PageModuleResolverStub.persistent_term_key()
+      %{page_hosts: page_hosts} = :persistent_term.get(persistent_term_key)
+      page_hosts = Map.put(page_hosts, Module3, "luma.localhost")
+
+      :persistent_term.put(persistent_term_key, %{
+        page_hosts: page_hosts,
+        search_trees: PageModuleResolver.build_search_trees(page_hosts)
+      })
     end
 
-    test "request on the route's subdomain is matched" do
+    test "request on the page's host is matched" do
       conn =
         :get
         |> Plug.Test.conn("http://luma.localhost/hologram-test-fixtures-router-module3/123")
@@ -264,7 +273,7 @@ defmodule Hologram.RouterTest do
       assert String.contains?(conn.resp_body, "Module3 page, a = 123")
     end
 
-    test "request on the base domain is not matched" do
+    test "request on a host without the page is not matched" do
       conn =
         :get
         |> Plug.Test.conn("http://localhost/hologram-test-fixtures-router-module3/123")
@@ -274,7 +283,7 @@ defmodule Hologram.RouterTest do
       assert conn.state == :unset
     end
 
-    test "request on another subdomain is not matched" do
+    test "request on another page app's host is not matched" do
       conn =
         :get
         |> Plug.Test.conn("http://cylk.localhost/hologram-test-fixtures-router-module3/123")
@@ -286,7 +295,9 @@ defmodule Hologram.RouterTest do
 
     test "request without a Phoenix endpoint" do
       conn =
-        Plug.Test.conn(:get, "http://luma.localhost/hologram-test-fixtures-router-module3/123")
+        :get
+        |> Plug.Test.conn("http://luma.localhost/hologram-test-fixtures-router-module3/123")
+        |> Plug.Test.init_test_session(%{})
 
       assert_raise Plug.Conn.WrapperError, ~r/key :phoenix_endpoint not found/, fn ->
         call(conn, [])

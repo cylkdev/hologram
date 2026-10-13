@@ -1,7 +1,7 @@
 defmodule Hologram.Test.Fixtures.Router.Module3 do
   use Hologram.Page
 
-  route "//luma.:host/hologram-test-fixtures-router-module3/:a"
+  route "/hologram-test-fixtures-router-module3/:a"
 
   param :a, :integer
 

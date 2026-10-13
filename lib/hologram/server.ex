@@ -545,7 +545,7 @@ defmodule Hologram.Server do
   Sets a temporary (302) redirect to the given target, marking the response as terminal.
 
   The target is either a URL string, used as-is, or a page module, resolved to its path, or to
-  its full URL when the page is on another subdomain than the page being served.
+  its full URL when the page is served on another host than the page being served.
   For a page with params, use `put_redirect/3`. For a different status code, follow with
   `put_status/2`.
 

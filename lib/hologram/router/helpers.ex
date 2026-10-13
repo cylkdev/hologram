@@ -1,7 +1,6 @@
 defmodule Hologram.Router.Helpers do
   alias Hologram.Assets.PathRegistry, as: AssetPathRegistry
   alias Hologram.Reflection
-  alias Hologram.Router.Route
 
   @doc """
   Retrieves the asset path, including the digest, for the specified static file within the static directory.
@@ -50,8 +49,7 @@ defmodule Hologram.Router.Helpers do
 
   def page_path(page_module, params) do
     required_params = page_module.__params__()
-    {_subdomain, route_path} = Route.split(page_module.__route__())
-    initial_acc = {params, route_path}
+    initial_acc = {params, page_module.__route__()}
 
     {remaining_params, path} =
       Enum.reduce(required_params, initial_acc, &process_param(&1, &2, page_module, params))
@@ -63,52 +61,38 @@ defmodule Hologram.Router.Helpers do
 
   @doc """
   Builds the URL a link on a page with the given origin uses for the given page module or tuple
-  of a page module and params: the relative URL when the page is on the same subdomain or on a
-  plain route, or the full URL on the origin's base domain, scheme and port when it is on another
-  subdomain.
+  of a page module and params: the relative URL when the page is served on the origin's host or
+  on every host, or the full URL on the page's own host, with the origin's scheme and port, when
+  it is served on another host.
   """
   @spec page_url(module | tuple, map | nil) :: String.t()
   def page_url(to, page_origin) do
     path = page_path(to)
 
-    if same_subdomain?(to, page_origin) do
+    if same_host?(to, page_origin) do
       path
     else
-      {subdomain, _route_path} = Route.split(target_page_module(to).__route__())
-      origin_url(page_origin, subdomain) <> path
+      host = Map.fetch!(page_origin.page_hosts, target_page_module(to))
+
+      "#{page_origin.scheme}://#{host}" <>
+        port_suffix(page_origin.scheme, page_origin.port) <> path
     end
   end
 
   @doc """
   Returns whether a link to the given page module or tuple of a page module and params, on a page
-  with the given origin, stays on that page's host: the page is on a plain route or on the
-  origin's subdomain.
+  with the given origin, stays on that page's host: the page is served on the origin's host or on
+  every host. With no origin there is no other host to tell apart, so the link stays.
   """
-  @spec same_subdomain?(module | tuple, map | nil) :: boolean
-  def same_subdomain?(to, page_origin) do
-    page_module = target_page_module(to)
-    {subdomain, _route_path} = Route.split(page_module.__route__())
+  @spec same_host?(module | tuple, map | nil) :: boolean
+  def same_host?(_to, nil), do: true
 
-    cond do
-      is_nil(subdomain) ->
-        true
-
-      is_nil(page_origin) ->
-        raise ArgumentError,
-              ~s/page "#{Reflection.module_name(page_module)}" is on a subdomain, so its URL needs the page origin/
-
-      true ->
-        subdomain == page_origin.subdomain
-    end
+  def same_host?(to, page_origin) do
+    host = Map.fetch!(page_origin.page_hosts, target_page_module(to))
+    is_nil(host) or host == page_origin.host
   end
 
-  # The scheme, the subdomain on the origin's base domain, and the port unless it is the scheme's
-  # default.
-  defp origin_url(page_origin, subdomain) do
-    "#{page_origin.scheme}://#{subdomain}.#{page_origin.base_host}" <>
-      port_suffix(page_origin.scheme, page_origin.port)
-  end
-
+  # The port unless it is the scheme's default.
   defp port_suffix("https", 443), do: ""
   defp port_suffix("http", 80), do: ""
   defp port_suffix(_scheme, port), do: ":#{port}"

@@ -14,7 +14,6 @@ defmodule Hologram.Controller do
   alias Hologram.Realtime.Tombstone
   alias Hologram.Router.Helpers, as: RouterHelpers
   alias Hologram.Router.PageModuleResolver
-  alias Hologram.Router.Route
   alias Hologram.Runtime.Cookie
   alias Hologram.Runtime.CSRFProtection
   alias Hologram.Runtime.Deserializer
@@ -161,8 +160,8 @@ defmodule Hologram.Controller do
   end
 
   @doc """
-  Resolves a redirect target, on the request's subdomain (nil when it has none), into the page it
-  names, so a client that navigates by page module can ask for that page's data directly.
+  Resolves a redirect target, on the request's host, into the page it names, so a client that
+  navigates by page module can ask for that page's data directly.
 
   Uses the same resolution the router uses for an incoming request, which is what keeps a redirect
   landing on the page a browser would have landed on. Params come from both places a page can carry
@@ -173,9 +172,9 @@ defmodule Hologram.Controller do
   A target no page owns - an external URL, or a path the framework itself serves - resolves to no
   module, leaving the client to hand it to the browser.
   """
-  @spec resolve_redirect_target(String.t(), String.t() | nil) ::
+  @spec resolve_redirect_target(String.t(), String.t()) ::
           {:redirect, String.t(), module | nil, map | nil}
-  def resolve_redirect_target(to, subdomain) do
+  def resolve_redirect_target(to, request_host) do
     %URI{host: host, path: path, query: query, scheme: scheme} = URI.parse(to)
 
     # Only a target that names no host of its own can be one of this app's pages. The same path
@@ -184,7 +183,7 @@ defmodule Hologram.Controller do
     #
     # The resolver answers false, not nil, when no page owns the path.
     page_module =
-      is_nil(host) && is_nil(scheme) && path && PageModuleResolver.resolve(subdomain, path)
+      is_nil(host) && is_nil(scheme) && path && PageModuleResolver.resolve(request_host, path)
 
     if page_module do
       query_params = if query, do: URI.decode_query(query), else: %{}
@@ -211,25 +210,25 @@ defmodule Hologram.Controller do
   end
 
   @doc """
-  Returns the origin of the page a request is for: the scheme, base domain and port of the public
-  url of the Phoenix endpoint the request passes through, and the request's subdomain on that
-  base domain (nil when it has none).
+  Returns the origin of the page a request is for: the scheme and port of the public url of the
+  Phoenix endpoint the request passes through, the request's host, and the host each page is
+  served on, which links read to tell a page on this host from a page on another.
   """
   @spec page_origin(Plug.Conn.t()) :: %{
           scheme: String.t(),
-          subdomain: String.t() | nil,
-          base_host: String.t(),
-          port: :inet.port_number()
+          host: String.t(),
+          port: :inet.port_number(),
+          page_hosts: %{module => String.t() | nil}
         }
   def page_origin(conn) do
     endpoint = Map.fetch!(conn.private, :phoenix_endpoint)
-    %URI{scheme: scheme, host: base_host, port: port} = endpoint.struct_url()
+    %URI{scheme: scheme, port: port} = endpoint.struct_url()
 
     %{
       scheme: scheme,
-      subdomain: Route.subdomain(conn.host, base_host),
-      base_host: base_host,
-      port: port
+      host: conn.host,
+      port: port,
+      page_hosts: PageModuleResolver.page_hosts()
     }
   end
 
@@ -238,8 +237,7 @@ defmodule Hologram.Controller do
   """
   @spec extract_params(String.t(), module) :: %{String.t() => String.t()}
   def extract_params(url_path, page_module) do
-    {_subdomain, route_path} = Route.split(page_module.__route__())
-    route_segments = String.split(route_path, "/")
+    route_segments = String.split(page_module.__route__(), "/")
     url_path_segments = String.split(url_path, "/")
 
     route_segments
@@ -572,10 +570,10 @@ defmodule Hologram.Controller do
     conn = PlugConnUtils.init_conn(initial_conn)
     page_origin = page_origin(conn)
 
-    if RouterHelpers.same_subdomain?(page_module, page_origin) do
+    if RouterHelpers.same_host?(page_module, page_origin) do
       send_subsequent_page(conn, page_module, page_origin)
     else
-      # A page on another subdomain is not a page here. The answer carries no page-data header,
+      # A page on another host is not a page here. The answer carries no page-data header,
       # so the client loads the link's address itself.
       conn
       |> Plug.Conn.send_resp(404, "")
@@ -884,9 +882,7 @@ defmodule Hologram.Controller do
           |> Map.delete("location")
           |> Map.to_list()
         )
-        |> send_page_data(
-          build_page_data_payload(resolve_redirect_target(to, page_origin(conn).subdomain))
-        )
+        |> send_page_data(build_page_data_payload(resolve_redirect_target(to, conn.host)))
     end
   end
 

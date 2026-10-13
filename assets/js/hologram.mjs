@@ -1323,16 +1323,13 @@ export default class Hologram {
 
   // Tested implicitely in feature tests
   //
-  // A page on another subdomain is on another host, so the browser loads it.
+  // A page on another host is loaded by the browser.
   static async #navigateToPage(toParam) {
     const pageOrigin = $.#pageOrigin();
 
     if (
       !Type.isTrue(
-        Elixir_Hologram_Router_Helpers["same_subdomain?/2"](
-          toParam,
-          pageOrigin,
-        ),
+        Elixir_Hologram_Router_Helpers["same_host?/2"](toParam, pageOrigin),
       )
     ) {
       Hologram.leaveApp(

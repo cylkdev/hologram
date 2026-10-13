@@ -1,5 +1,6 @@
 defmodule Mix.Tasks.Holo.RoutesTest do
-  use Hologram.Test.BasicCase, async: true
+  # One test sets a host in the application environment every test reads.
+  use Hologram.Test.BasicCase, async: false
   import ExUnit.CaptureIO
   alias Mix.Tasks.Holo.Routes, as: Task
 
@@ -29,18 +30,15 @@ defmodule Mix.Tasks.Holo.RoutesTest do
     assert String.contains?(output, expected_route_output)
   end
 
-  test "run/1 prints subdomain routes as written, after the plain routes, grouped by subdomain" do
+  test "run/1 prefixes each route with the host its page's OTP application configures" do
+    Application.put_env(:hologram, :host, "luma.test")
+    on_exit(fn -> Application.delete_env(:hologram, :host) end)
+
     output = capture_io(fn -> Task.run([]) end)
 
-    plain_route = "\n/hologram-test-fixtures-mix-tasks-holo-routes-module1\n"
-    cylk_route = "\n//cylk.:host/hologram-test-fixtures-mix-tasks-holo-routes-module4\n"
-    luma_route = "\n//luma.:host/hologram-test-fixtures-mix-tasks-holo-routes-module3\n"
-
-    {plain_position, _length} = :binary.match(output, plain_route)
-    {cylk_position, _length} = :binary.match(output, cylk_route)
-    {luma_position, _length} = :binary.match(output, luma_route)
-
-    assert plain_position < cylk_position
-    assert cylk_position < luma_position
+    assert String.contains?(
+             output,
+             "\nluma.test/hologram-test-fixtures-mix-tasks-holo-routes-module1\n"
+           )
   end
 end

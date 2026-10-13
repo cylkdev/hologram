@@ -1,12 +1,12 @@
 defmodule Mix.Tasks.Holo.Routes do
   @moduledoc """
-  Prints the list of page routes as written: the plain routes first, then each subdomain's
-  routes together, each group ordered by route path.
+  Prints the list of page routes: the routes served on every host first, then each host's routes
+  together, prefixed with that host, each group ordered by route path.
   """
 
   use Mix.Task
   alias Hologram.Reflection
-  alias Hologram.Router.Route
+  alias Hologram.Router.PageModuleResolver
 
   @requirements ["app.config"]
 
@@ -36,8 +36,8 @@ defmodule Mix.Tasks.Holo.Routes do
     print_divider()
   end
 
-  defp print_route({route, module}) do
-    print(route)
+  defp print_route({host, route, module}) do
+    print("#{host}#{route}")
     print(Reflection.module_name(module))
     print(Reflection.source_path(module))
     print_divider()
@@ -45,8 +45,9 @@ defmodule Mix.Tasks.Holo.Routes do
 
   defp print_routes do
     Reflection.list_pages()
-    |> Enum.map(&{&1.__route__(), &1})
-    |> Enum.sort_by(fn {route, _module} -> Route.split(route) end)
+    |> PageModuleResolver.build_page_hosts()
+    |> Enum.map(fn {module, host} -> {host, module.__route__(), module} end)
+    |> Enum.sort_by(fn {host, route, _module} -> {host, route} end)
     |> Enum.each(&print_route/1)
   end
 end

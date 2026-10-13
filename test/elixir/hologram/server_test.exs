@@ -937,8 +937,14 @@ defmodule Hologram.ServerTest do
              }
     end
 
-    test "redirects to a page module on the served page's subdomain by its path" do
-      page_origin = %{scheme: "https", subdomain: "luma", base_host: "localhost", port: 5200}
+    test "redirects to a page module on the served page's host by its path" do
+      page_origin = %{
+        scheme: "https",
+        host: "luma.localhost",
+        port: 5200,
+        page_hosts: %{Module4 => "luma.localhost", Module6 => "cylk.localhost"}
+      }
+
       result = put_redirect(%Server{page_origin: page_origin}, Module4)
 
       assert result.response_headers == %{
@@ -946,8 +952,14 @@ defmodule Hologram.ServerTest do
              }
     end
 
-    test "redirects to a page module on another subdomain by its full URL" do
-      page_origin = %{scheme: "https", subdomain: "luma", base_host: "localhost", port: 5200}
+    test "redirects to a page module on another host by its full URL" do
+      page_origin = %{
+        scheme: "https",
+        host: "luma.localhost",
+        port: 5200,
+        page_hosts: %{Module4 => "luma.localhost", Module6 => "cylk.localhost"}
+      }
+
       result = put_redirect(%Server{page_origin: page_origin}, Module6)
 
       assert result.response_headers == %{

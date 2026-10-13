@@ -9,12 +9,12 @@ defmodule Hologram.UI.Link do
   prop :style, :string, default: nil
   prop :to, [:module, :string, :tuple]
 
-  # A link to a page on another subdomain is a plain anchor: the browser loads that page, since
+  # A link to a page on another host is a plain anchor: the browser loads that page, since
   # navigation inside the app cannot move it to another host.
   @impl Component
   def template do
     ~HOLO"""
-    {%if RouterHelpers.same_subdomain?(@to, @page_origin)}<a
+    {%if RouterHelpers.same_host?(@to, @page_origin)}<a
       href={page_path(@to)}
       class={@class}
       rel={@rel}

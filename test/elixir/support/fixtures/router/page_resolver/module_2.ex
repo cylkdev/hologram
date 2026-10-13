@@ -1,7 +1,7 @@
 defmodule Hologram.Test.Fixtures.Router.PageModuleResolver.Module2 do
   use Hologram.Page
 
-  route "//luma.:host/hologram-test-fixtures-router-pagemoduleresolver-module2"
+  route "/hologram-test-fixtures-router-pagemoduleresolver-module2"
 
   layout Hologram.Test.Fixtures.LayoutFixture
 

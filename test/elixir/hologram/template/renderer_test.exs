@@ -1535,7 +1535,13 @@ defmodule Hologram.Template.RendererTest do
 
     test "page origin given by the controller" do
       ETS.put(PageDigestRegistryStub.ets_table_name(), Module39, :dummy_module_39_digest)
-      page_origin = %{scheme: "https", subdomain: "luma", base_host: "localhost", port: 5200}
+
+      page_origin = %{
+        scheme: "https",
+        host: "luma.localhost",
+        port: 5200,
+        page_hosts: %{Module39 => "luma.localhost"}
+      }
 
       {_html, component_registry, _server} =
         render_page_without_tree(Module39, @params, @server, [{:page_origin, page_origin} | @opts])

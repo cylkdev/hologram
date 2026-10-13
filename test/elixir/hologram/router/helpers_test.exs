@@ -48,21 +48,12 @@ defmodule Hologram.Router.HelpersTest do
       assert page_path({Module2, param_1: :abc, param_2: 123}) ==
                "/hologram-test-fixtures-router-helpers-module2/abc/123"
     end
-
-    test "subdomain route" do
-      assert page_path(Module4) == "/hologram-test-fixtures-router-helpers-module4"
-    end
   end
 
   describe "page_path/2" do
     test "valid keyword params" do
       assert page_path(Module2, param_1: :abc, param_2: 123) ==
                "/hologram-test-fixtures-router-helpers-module2/abc/123"
-    end
-
-    test "subdomain route with params" do
-      assert page_path(Module5, param_1: :abc, param_2: 123) ==
-               "/hologram-test-fixtures-router-helpers-module5/abc/123"
     end
 
     test "valid map params" do
@@ -110,51 +101,50 @@ defmodule Hologram.Router.HelpersTest do
 
   describe "page_url/2" do
     setup do
-      [page_origin: %{scheme: "https", subdomain: "luma", base_host: "localhost", port: 5200}]
+      [
+        page_origin: %{
+          scheme: "https",
+          host: "luma.localhost",
+          port: 5200,
+          page_hosts: %{
+            Module1 => nil,
+            Module4 => "luma.localhost",
+            Module5 => "luma.localhost",
+            Module6 => "cylk.localhost"
+          }
+        }
+      ]
     end
 
-    test "page on the same subdomain", %{page_origin: page_origin} do
+    test "page on the same host", %{page_origin: page_origin} do
       assert page_url(Module4, page_origin) == "/hologram-test-fixtures-router-helpers-module4"
     end
 
-    test "page on a plain route", %{page_origin: page_origin} do
+    test "page on every host", %{page_origin: page_origin} do
       assert page_url(Module1, page_origin) == "/hologram-test-fixtures-router-helpers-module1"
     end
 
-    test "page on another subdomain", %{page_origin: page_origin} do
+    test "page on another host", %{page_origin: page_origin} do
       assert page_url(Module6, page_origin) ==
                "https://cylk.localhost:5200/hologram-test-fixtures-router-helpers-module6"
     end
 
-    test "page on another subdomain with params", %{page_origin: page_origin} do
-      page_origin = %{page_origin | subdomain: "cylk"}
+    test "page on another host with params", %{page_origin: page_origin} do
+      page_origin = %{page_origin | host: "cylk.localhost"}
 
       assert page_url({Module5, param_1: :abc, param_2: 123}, page_origin) ==
                "https://luma.localhost:5200/hologram-test-fixtures-router-helpers-module5/abc/123"
     end
 
-    test "page on another subdomain from the base domain", %{page_origin: page_origin} do
-      page_origin = %{page_origin | subdomain: nil}
-
-      assert page_url(Module4, page_origin) ==
-               "https://luma.localhost:5200/hologram-test-fixtures-router-helpers-module4"
-    end
-
     test "default port is left out", %{page_origin: page_origin} do
-      page_origin = %{page_origin | base_host: "example.com", port: 443}
+      page_origin = %{page_origin | port: 443}
 
       assert page_url(Module6, page_origin) ==
-               "https://cylk.example.com/hologram-test-fixtures-router-helpers-module6"
+               "https://cylk.localhost/hologram-test-fixtures-router-helpers-module6"
     end
 
-    test "page on a subdomain without a page origin" do
-      assert_raise ArgumentError,
-                   ~s/page "Hologram.Test.Fixtures.Router.Helpers.Module6" is on a subdomain, so its URL needs the page origin/,
-                   fn -> page_url(Module6, nil) end
-    end
-
-    test "page on a plain route without a page origin" do
-      assert page_url(Module1, nil) == "/hologram-test-fixtures-router-helpers-module1"
+    test "without a page origin" do
+      assert page_url(Module6, nil) == "/hologram-test-fixtures-router-helpers-module6"
     end
   end
 end

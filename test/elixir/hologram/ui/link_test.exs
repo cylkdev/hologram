@@ -49,18 +49,24 @@ defmodule Hologram.UI.LinkTest do
     assert render_markup(markup) == expected
   end
 
-  describe "on a subdomain page" do
+  describe "on a page served on its own host" do
     setup do
-      page_origin = %{scheme: "https", subdomain: "luma", base_host: "localhost", port: 5200}
+      page_origin = %{
+        scheme: "https",
+        host: "luma.localhost",
+        port: 5200,
+        page_hosts: %{Module4 => "luma.localhost", Module5 => "cylk.localhost"}
+      }
+
       [env: %Env{context: %{{Hologram.Runtime, :page_origin} => page_origin}}]
     end
 
-    test "link to a page on the same subdomain", %{env: env} do
+    test "link to a page on the same host", %{env: env} do
       assert render_markup(~HOLO"<Link to={Module4}>my anchor text</Link>", %{}, env) ==
                ~s'<a href="/hologram-test-fixtures-ui-link-module4">my anchor text</a>'
     end
 
-    test "link to a page on another subdomain", %{env: env} do
+    test "link to a page on another host", %{env: env} do
       assert render_markup(~HOLO"<Link to={Module5}>my anchor text</Link>", %{}, env) ==
                ~s'<a href="https://cylk.localhost:5200/hologram-test-fixtures-ui-link-module5">my anchor text</a>'
     end

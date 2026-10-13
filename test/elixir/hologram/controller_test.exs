@@ -15,8 +15,7 @@ defmodule Hologram.ControllerTest do
   alias Hologram.Realtime.Receipt
   alias Hologram.Realtime.SubscriptionRegistry
   alias Hologram.Realtime.Tombstone
-  alias Hologram.Router.Route
-  alias Hologram.Router.SearchTree
+  alias Hologram.Router.PageModuleResolver
   alias Hologram.Runtime.Cookie
   alias Hologram.Runtime.CSRFProtection
   alias Hologram.Runtime.Session
@@ -232,26 +231,16 @@ defmodule Hologram.ControllerTest do
     |> Map.put(:body_params, %{"_json" => page_request_body()})
   end
 
-  # Gives the resolver a search tree holding just the given pages, rather than standing up the
-  # registry process over whatever pages happen to be compiled.
-  defp stub_page_module_resolver(page_modules) do
-    persistent_term_key = :controller_test_search_tree
+  # Serves the given pages on the given hosts, and every other page where it already is.
+  defp put_page_hosts(hosts) do
+    persistent_term_key = PageModuleResolverStub.persistent_term_key()
+    %{page_hosts: page_hosts} = :persistent_term.get(persistent_term_key)
+    page_hosts = Map.merge(page_hosts, hosts)
 
-    stub(PageModuleResolverMock, :persistent_term_key, fn -> persistent_term_key end)
-
-    # One route table per subdomain, plus the plain routes' table under nil.
-    search_trees =
-      Enum.reduce(page_modules, %{nil => %SearchTree.Node{}}, fn page_module, acc ->
-        {subdomain, path} = Route.split(page_module.__route__())
-        search_tree = Map.get(acc, subdomain, %SearchTree.Node{})
-        Map.put(acc, subdomain, SearchTree.add_route(search_tree, path, page_module))
-      end)
-
-    :persistent_term.put(persistent_term_key, search_trees)
-
-    on_exit(fn -> :persistent_term.erase(persistent_term_key) end)
-
-    :ok
+    :persistent_term.put(persistent_term_key, %{
+      page_hosts: page_hosts,
+      search_trees: PageModuleResolver.build_search_trees(page_hosts)
+    })
   end
 
   setup do
@@ -261,35 +250,25 @@ defmodule Hologram.ControllerTest do
     setup_asset_manifest_cache(AssetManifestCacheStub)
 
     setup_page_digest_registry(PageDigestRegistryStub)
+
+    setup_page_module_resolver(PageModuleResolverStub)
   end
 
   describe "page_origin/1" do
-    test "request on a subdomain" do
+    test "carries the endpoint's scheme and port, the request's host and each page's host" do
+      put_page_hosts(%{Module33 => "luma.localhost"})
+
       conn =
         :get
         |> Plug.Test.conn("http://luma.localhost/")
         |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
 
-      assert page_origin(conn) == %{
+      assert %{
                scheme: "https",
-               subdomain: "luma",
-               base_host: "localhost",
-               port: 5200
-             }
-    end
-
-    test "request on the base domain" do
-      conn =
-        :get
-        |> Plug.Test.conn("http://localhost/")
-        |> Plug.Conn.put_private(:phoenix_endpoint, Endpoint)
-
-      assert page_origin(conn) == %{
-               scheme: "https",
-               subdomain: nil,
-               base_host: "localhost",
-               port: 5200
-             }
+               host: "luma.localhost",
+               port: 5200,
+               page_hosts: %{Module33 => "luma.localhost", Module1 => nil}
+             } = page_origin(conn)
     end
   end
 
@@ -304,12 +283,6 @@ defmodule Hologram.ControllerTest do
       url_path = "/hologram-test-fixtures-runtime-controller-module1/hello%20world/ccc/foo%2Fbar"
 
       assert extract_params(url_path, Module1) == %{"aaa" => "hello world", "bbb" => "foo/bar"}
-    end
-
-    test "extracts params from URL path of a subdomain route" do
-      url_path = "/hologram-test-fixtures-runtime-controller-module33/111/ccc/222"
-
-      assert extract_params(url_path, Module33) == %{"aaa" => "111", "bbb" => "222"}
     end
   end
 
@@ -623,20 +596,20 @@ defmodule Hologram.ControllerTest do
 
   describe "resolve_redirect_target/2" do
     setup do
-      stub_page_module_resolver([Module1, Module11, Module32, Module33, Module4])
+      put_page_hosts(%{Module33 => "luma.localhost"})
     end
 
     test "resolves a path to the page that owns it" do
       to = Module4.__route__()
 
-      assert resolve_redirect_target(to, nil) == {:redirect, to, Module4, %{}}
+      assert resolve_redirect_target(to, "localhost") == {:redirect, to, Module4, %{}}
     end
 
     test "casts params carried by the path" do
       assert {:redirect, _to, Module1, %{aaa: 111, bbb: 222}} =
                resolve_redirect_target(
                  "/hologram-test-fixtures-runtime-controller-module1/111/ccc/222",
-                 nil
+                 "localhost"
                )
     end
 
@@ -644,7 +617,7 @@ defmodule Hologram.ControllerTest do
       assert {:redirect, _to, Module11, %{param_a: "hello world", param_b: "x"}} =
                resolve_redirect_target(
                  "/hologram-test-fixtures-controller-module11/hello%20world/x",
-                 nil
+                 "localhost"
                )
     end
 
@@ -654,7 +627,7 @@ defmodule Hologram.ControllerTest do
       assert {:redirect, _to, Module32, %{param_a: "hello world", param_b: 42}} =
                resolve_redirect_target(
                  "/hologram-test-fixtures-controller-module32?param_a=hello+world&param_b=42",
-                 nil
+                 "localhost"
                )
     end
 
@@ -663,7 +636,7 @@ defmodule Hologram.ControllerTest do
     test "leaves out a query param the page does not declare" do
       to = Module4.__route__() <> "?utm_source=x"
 
-      assert resolve_redirect_target(to, nil) == {:redirect, to, Module4, %{}}
+      assert resolve_redirect_target(to, "localhost") == {:redirect, to, Module4, %{}}
     end
 
     test "keeps the params the page declares when undeclared ones travel with them" do
@@ -671,11 +644,11 @@ defmodule Hologram.ControllerTest do
         "/hologram-test-fixtures-controller-module11/hello%20world/x?utm_source=y"
 
       assert {:redirect, ^to, Module11, %{param_a: "hello world", param_b: "x"}} =
-               resolve_redirect_target(to, nil)
+               resolve_redirect_target(to, "localhost")
     end
 
     test "resolves a target no page owns to no module" do
-      assert resolve_redirect_target("https://example.com/x", nil) ==
+      assert resolve_redirect_target("https://example.com/x", "localhost") ==
                {:redirect, "https://example.com/x", nil, nil}
     end
 
@@ -684,39 +657,39 @@ defmodule Hologram.ControllerTest do
     test "resolves a target on another origin to no module, path collision or not" do
       to = "https://example.com" <> Module4.__route__()
 
-      assert resolve_redirect_target(to, nil) == {:redirect, to, nil, nil}
+      assert resolve_redirect_target(to, "localhost") == {:redirect, to, nil, nil}
     end
 
     test "resolves a protocol-relative target to no module" do
       to = "//example.com" <> Module4.__route__()
 
-      assert resolve_redirect_target(to, nil) == {:redirect, to, nil, nil}
+      assert resolve_redirect_target(to, "localhost") == {:redirect, to, nil, nil}
     end
 
     # A scheme with no authority still names something other than a path within this app.
     test "resolves a target carrying a scheme to no module" do
       to = "https://" <> Module4.__route__()
 
-      assert resolve_redirect_target(to, nil) == {:redirect, to, nil, nil}
+      assert resolve_redirect_target(to, "localhost") == {:redirect, to, nil, nil}
     end
 
-    test "resolves a path to the page on the request's subdomain that owns it" do
+    test "resolves a path to the page on the request's host that owns it" do
       assert resolve_redirect_target(
                "/hologram-test-fixtures-runtime-controller-module33/111/ccc/222",
-               "luma"
+               "luma.localhost"
              ) ==
                {:redirect, "/hologram-test-fixtures-runtime-controller-module33/111/ccc/222",
                 Module33, %{aaa: 111, bbb: 222}}
     end
 
-    test "resolves a path whose page is on another subdomain to no module" do
+    test "resolves a path whose page is on another host to no module" do
       to = "/hologram-test-fixtures-runtime-controller-module33/111/ccc/222"
 
-      assert resolve_redirect_target(to, "cylk") == {:redirect, to, nil, nil}
+      assert resolve_redirect_target(to, "cylk.localhost") == {:redirect, to, nil, nil}
     end
 
     test "resolves a path the framework itself serves to no module" do
-      assert resolve_redirect_target("/hologram/ping", nil) ==
+      assert resolve_redirect_target("/hologram/ping", "localhost") ==
                {:redirect, "/hologram/ping", nil, nil}
     end
   end
@@ -2543,7 +2516,7 @@ defmodule Hologram.ControllerTest do
 
   describe "handle_subsequent_page_request/2" do
     setup do
-      stub_page_module_resolver([Module4])
+      put_page_hosts(%{Module33 => "luma.localhost"})
     end
 
     test "answers with the page described as data and halts the pipeline" do
@@ -2569,7 +2542,7 @@ defmodule Hologram.ControllerTest do
       assert response["tree"] == []
     end
 
-    test "page on the request's subdomain is answered as data" do
+    test "page on the request's host is answered as data" do
       ETS.put(PageDigestRegistryStub.ets_table_name(), Module33, :dummy_module_33_digest)
 
       conn =
@@ -2581,20 +2554,9 @@ defmodule Hologram.ControllerTest do
       assert Plug.Conn.get_resp_header(conn, "hologram-page-data") == ["true"]
     end
 
-    test "page on another subdomain is not a page here" do
+    test "page on another host is not a page here" do
       conn =
         "http://cylk.localhost/hologram/page/Hologram.Test.Fixtures.Controller.Module33?aaa=111&bbb=222"
-        |> subsequent_page_request_conn()
-        |> handle_subsequent_page_request(Module33)
-
-      assert conn.halted == true
-      assert conn.status == 404
-      assert Plug.Conn.get_resp_header(conn, "hologram-page-data") == []
-    end
-
-    test "page on a subdomain requested on the base domain is not a page here" do
-      conn =
-        "http://localhost/hologram/page/Hologram.Test.Fixtures.Controller.Module33?aaa=111&bbb=222"
         |> subsequent_page_request_conn()
         |> handle_subsequent_page_request(Module33)
 

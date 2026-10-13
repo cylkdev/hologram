@@ -852,7 +852,7 @@ defmodule Hologram.Template.Renderer do
   end
 
   # The controller gives every page it renders its origin, which links read to address a page on
-  # another subdomain.
+  # another host.
   defp maybe_put_page_origin_context(page_component_struct, opts) do
     case Keyword.fetch(opts, :page_origin) do
       {:ok, page_origin} ->

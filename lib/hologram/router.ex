@@ -67,9 +67,7 @@ defmodule Hologram.Router do
   end
 
   match _ do
-    %{subdomain: subdomain} = Controller.page_origin(conn)
-
-    if page_module = PageModuleResolver.resolve(subdomain, conn.request_path) do
+    if page_module = PageModuleResolver.resolve(conn.host, conn.request_path) do
       Controller.handle_initial_page_request(conn, page_module)
     else
       conn
