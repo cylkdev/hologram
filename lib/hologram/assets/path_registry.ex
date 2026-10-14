@@ -35,19 +35,28 @@ defmodule Hologram.Assets.PathRegistry do
     ets_table_name = impl().ets_table_name()
     ETS.create_named_table(ets_table_name)
 
-    populate(ets_table_name)
+    static_dir = impl().static_dir()
+    populate(ets_table_name, static_dir)
 
-    {:ok, nil}
+    {:ok, static_dir}
   end
 
   @doc """
   Returns the asset path mapping.
   """
   @impl GenServer
-  @spec handle_call(:get_mapping, GenServer.from(), nil) ::
-          {:reply, %{String.t() => String.t()}, nil}
-  def handle_call(:get_mapping, _from, nil) do
-    {:reply, ETS.get_all(impl().ets_table_name()), nil}
+  @spec handle_call(:get_mapping | :reload, GenServer.from(), String.t()) ::
+          {:reply, %{String.t() => String.t()} | true, String.t()}
+  def handle_call(:get_mapping, _from, static_dir) do
+    {:reply, ETS.get_all(impl().ets_table_name()), static_dir}
+  end
+
+  # Reloads from the static dir resolved when the registry started: a running
+  # app's static dir is fixed, while resolving it again reads the VM-wide Mix
+  # project stack, which names whichever umbrella app is being compiled at
+  # that moment.
+  def handle_call(:reload, _from, static_dir) do
+    {:reply, populate(impl().ets_table_name(), static_dir), static_dir}
   end
 
   @doc """
@@ -92,11 +101,12 @@ defmodule Hologram.Assets.PathRegistry do
   end
 
   @doc """
-  Reloads the path registry data.
+  Reloads the path registry data from the static dir resolved when the
+  registry started.
   """
   @spec reload :: true
   def reload do
-    populate(impl().ets_table_name())
+    GenServer.call(impl().process_name(), :reload)
   end
 
   @doc """
@@ -150,8 +160,8 @@ defmodule Hologram.Assets.PathRegistry do
     Application.get_env(:hologram, :asset_path_registry_impl, __MODULE__)
   end
 
-  defp populate(ets_table_name) do
-    assets = find_assets(impl().static_dir())
+  defp populate(ets_table_name, static_dir) do
+    assets = find_assets(static_dir)
     ETS.replace(ets_table_name, assets)
   end
 

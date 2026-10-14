@@ -33,7 +33,7 @@ defmodule Hologram.Assets.PathRegistryTest do
   test "init/1", %{mapping: mapping} do
     ets_table_name = AssetPathRegistryStub.ets_table_name()
 
-    assert init(nil) == {:ok, nil}
+    assert init(nil) == {:ok, AssetPathRegistryStub.static_dir()}
     assert ets_table_exists?(ets_table_name)
     assert ETS.get_all(ets_table_name) == mapping
   end
@@ -75,6 +75,15 @@ defmodule Hologram.Assets.PathRegistryTest do
     reload()
 
     assert ETS.get_all(ets_table_name) == mapping
+  end
+
+  test "reload/0 reads the static dir resolved at start, whatever static_dir/0 answers later",
+       %{mapping: mapping} do
+    AssetPathRegistry.start_link([])
+    stub(AssetPathRegistryMock, :static_dir, fn -> "/missing/priv/static" end)
+
+    assert reload() == true
+    assert ETS.get_all(AssetPathRegistryStub.ets_table_name()) == mapping
   end
 
   test "start_link/1" do
