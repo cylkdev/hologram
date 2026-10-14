@@ -94,12 +94,9 @@ defmodule Hologram.Assets.PathRegistry do
   @doc """
   Reloads the path registry data.
   """
-  @spec reload :: :ok
+  @spec reload :: true
   def reload do
-    ets_table_name = impl().ets_table_name()
-    ETS.reset(ets_table_name)
-
-    populate(ets_table_name)
+    populate(impl().ets_table_name())
   end
 
   @doc """
@@ -154,9 +151,8 @@ defmodule Hologram.Assets.PathRegistry do
   end
 
   defp populate(ets_table_name) do
-    impl().static_dir()
-    |> find_assets()
-    |> Enum.each(fn {key, value} -> ETS.put(ets_table_name, key, value) end)
+    assets = find_assets(impl().static_dir())
+    ETS.replace(ets_table_name, assets)
   end
 
   defp static_file_path_with_digest_suffix_regex(static_dir) do

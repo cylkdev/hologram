@@ -113,17 +113,18 @@ defmodule Hologram.Commons.PLT do
   end
 
   @doc """
-  Populates the PLT with items dumped to the given file.
+  Replaces the items in the PLT with the items dumped to the given file.
   """
   @spec load(PLT.t(), String.t()) :: PLT.t()
-  def load(plt, dump_path) do
+  def load(%PLT{table_ref: table_ref} = plt, dump_path) do
     items =
       dump_path
       |> File.read!()
       |> SerializationUtils.deserialize(true)
       |> Map.to_list()
 
-    put(plt, items)
+    ETS.replace(table_ref, items)
+    plt
   end
 
   @doc """
@@ -153,15 +154,6 @@ defmodule Hologram.Commons.PLT do
   @spec put(PLT.t(), any, any) :: PLT.t()
   def put(%PLT{table_ref: table_ref} = plt, key, value) do
     ETS.put(table_ref, key, value)
-    plt
-  end
-
-  @doc """
-  Removes all items from the PLT.
-  """
-  @spec reset(PLT.t()) :: PLT.t()
-  def reset(%PLT{table_ref: table_ref} = plt) do
-    ETS.reset(table_ref)
     plt
   end
 

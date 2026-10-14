@@ -110,6 +110,17 @@ defmodule Hologram.Commons.PLTTest do
     assert get_all(plt_2) == Enum.into(@items, %{})
   end
 
+  test "load/2 replaces the items already in the PLT", %{plt: plt} do
+    dump_dir = Path.join([@tmp_dir, "tests", "commons", "plt", "load_2_replace"])
+    clean_dir(dump_dir)
+
+    dump_path = Path.join(dump_dir, "test.plt")
+    dump(start(items: [{:my_key_3, :my_value_3}]), dump_path)
+
+    assert load(plt, dump_path) == plt
+    assert get_all(plt) == %{my_key_3: :my_value_3}
+  end
+
   describe "maybe_load/2" do
     setup do
       dump_dir = Path.join([@tmp_dir, "tests", "commons", "plt", "maybe_load_2"])
@@ -155,11 +166,6 @@ defmodule Hologram.Commons.PLTTest do
   test "put/3", %{plt: %{table_ref: table_ref} = plt} do
     assert put(plt, :my_key_3, :my_value_3) == plt
     assert ETS.get!(table_ref, :my_key_3) == :my_value_3
-  end
-
-  test "reset/1", %{plt: %{table_ref: table_ref} = plt} do
-    assert reset(plt) == plt
-    assert ETS.get_all(table_ref) == %{}
   end
 
   describe "start/1" do

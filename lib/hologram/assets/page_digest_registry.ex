@@ -66,7 +66,6 @@ defmodule Hologram.Assets.PageDigestRegistry do
   def reload do
     impl().ets_table_name()
     |> plt()
-    |> PLT.reset()
     |> populate()
   end
 
