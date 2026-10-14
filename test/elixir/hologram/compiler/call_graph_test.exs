@@ -46,6 +46,8 @@ defmodule Hologram.Compiler.CallGraphTest do
   alias Hologram.Test.Fixtures.Compiler.CallGraph.Module4
   alias Hologram.Test.Fixtures.Compiler.CallGraph.Module40
   alias Hologram.Test.Fixtures.Compiler.CallGraph.Module41
+  alias Hologram.Test.Fixtures.Compiler.CallGraph.Module42
+  alias Hologram.Test.Fixtures.Compiler.CallGraph.Module43
   alias Hologram.Test.Fixtures.Compiler.CallGraph.Module5
   alias Hologram.Test.Fixtures.Compiler.CallGraph.Module6
   alias Hologram.Test.Fixtures.Compiler.CallGraph.Module7
@@ -2285,6 +2287,37 @@ defmodule Hologram.Compiler.CallGraphTest do
                {{:module_2, :fun_b, :arity_b}, {Module9, :my_fun_2, 0}},
                {{:module_3, :fun_c, :arity_c}, Module9}
              ]
+    end
+
+    test "gives the graph a full build of the edited modules gives", %{
+      empty_call_graph: call_graph_1
+    } do
+      module_42_ir = IR.for_module(Module42)
+      module_43_ir = IR.for_module(Module43)
+
+      ir_plt =
+        PLT.start()
+        |> PLT.put(Module42, module_42_ir)
+        |> PLT.put(Module43, module_43_ir)
+
+      # The previous build of both modules: a call between them that their
+      # current IR no longer makes.
+      add_edge(call_graph_1, {Module42, :my_fun_42, 0}, {Module43, :my_fun_43a, 0})
+
+      call_graph_2 =
+        start()
+        |> build(module_42_ir)
+        |> build(module_43_ir)
+
+      diff = %{
+        added_modules: [],
+        removed_modules: [],
+        edited_modules: [Module42, Module43]
+      }
+
+      patch(call_graph_1, ir_plt, diff)
+
+      assert get_graph(call_graph_1) == get_graph(call_graph_2)
     end
   end
 

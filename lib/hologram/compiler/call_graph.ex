@@ -1040,29 +1040,39 @@ defmodule Hologram.Compiler.CallGraph do
   rebuilding the graph paths of modules that have been edited,
   and adding the graph paths of modules that have been added.
 
+  The patched graph is the graph a full build of the current modules gives.
+  Patching runs in three steps, each finishing before the next starts:
+
+    1. it removes the vertices of the removed and edited modules;
+    2. it restores the edges into the edited modules from the vertices that
+       remain;
+    3. it builds the edited and added modules from their IR.
+
   Benchmarks: https://github.com/bartblast/hologram/blob/master/benchmarks/compiler/call_graph/patch_3/README.md
   """
   @spec patch(t, PLT.t(), map) :: t
   def patch(call_graph, ir_plt, diff) do
-    remove_tasks =
-      TaskUtils.async_many(diff.removed_modules, &remove_module_vertices(call_graph, &1))
+    incoming_edges = Enum.flat_map(diff.edited_modules, &remote_incoming_edges(call_graph, &1))
 
-    update_tasks =
-      TaskUtils.async_many(diff.edited_modules, fn module ->
-        remote_incoming_edges = remote_incoming_edges(call_graph, module)
+    (diff.removed_modules ++ diff.edited_modules)
+    |> TaskUtils.async_many(&remove_module_vertices(call_graph, &1))
+    |> Task.await_many(:infinity)
 
-        call_graph
-        |> remove_module_vertices(module)
-        |> build_for_module(ir_plt, module)
-        |> add_edges(remote_incoming_edges)
+    remaining_vertices =
+      call_graph
+      |> vertices()
+      |> MapSet.new()
+
+    remaining_incoming_edges =
+      Enum.filter(incoming_edges, fn {from_vertex, _to_vertex} ->
+        MapSet.member?(remaining_vertices, from_vertex)
       end)
 
-    add_tasks =
-      TaskUtils.async_many(diff.added_modules, &build_for_module(call_graph, ir_plt, &1))
+    add_edges(call_graph, remaining_incoming_edges)
 
-    Task.await_many(remove_tasks, :infinity)
-    Task.await_many(update_tasks, :infinity)
-    Task.await_many(add_tasks, :infinity)
+    (diff.edited_modules ++ diff.added_modules)
+    |> TaskUtils.async_many(&build_for_module(call_graph, ir_plt, &1))
+    |> Task.await_many(:infinity)
 
     refresh_protocol_dispatch_edges(call_graph, diff.added_modules ++ diff.edited_modules)
 
